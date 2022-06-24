@@ -19,8 +19,8 @@ enum Register {
 
 pub struct INA219NonOwned<I2C> {
     address: u8,
-    current_lsb: i16,
-    power_lsb: i16,
+    current_lsb: f32,
+    power_lsb: f32,
     _marker: core::marker::PhantomData<I2C>,
 }
 
@@ -28,7 +28,7 @@ impl<I2C, E> INA219NonOwned<I2C>
 where
     I2C: i2c::Write<Error = E> + i2c::Read<Error = E>,
 {
-    /// Maximum expected current in A, must be in (0; 3.2].
+    /// Maximum expected current in A, must be in (0.4; 3.2].
     /// r_shunt in Ohm
     pub fn new(
         i2c: &mut I2C,
@@ -45,8 +45,8 @@ where
 
         let ina219 = INA219NonOwned {
             address,
-            current_lsb: (current_lsb * 1000000_f32) as i16,
-            power_lsb: (power_lsb * 1000000_f32) as i16,
+            current_lsb,
+            power_lsb,
             _marker: core::marker::PhantomData,
         };
 
@@ -75,16 +75,16 @@ where
         Ok((value >> 3) * 4)
     }
 
-    /// Power in µW
-    pub fn power(&mut self, i2c: &mut I2C) -> Result<i16, E> {
+    /// Power in 10 µW
+    pub fn power(&mut self, i2c: &mut I2C) -> Result<i32, E> {
         let value = self.read(i2c, Register::Power)?;
-        Ok(value as i16 * self.power_lsb)
+        Ok((value as f32 * self.power_lsb * 100000_f32) as i32)
     }
 
-    /// Current in µA
-    pub fn current(&mut self, i2c: &mut I2C) -> Result<i16, E> {
+    /// Current in 10 µA
+    pub fn current(&mut self, i2c: &mut I2C) -> Result<i32, E> {
         let value = self.read(i2c, Register::Current)?;
-        Ok(value as i16 * self.current_lsb)
+        Ok((value as f32 * self.current_lsb * 100000_f32) as i32)
     }
 
     fn read(&mut self, i2c: &mut I2C, register: Register) -> Result<u16, E> {
@@ -127,13 +127,13 @@ where
         self.1.voltage(&mut self.0)
     }
 
-    /// Power in µW
-    pub fn power(&mut self) -> Result<i16, E> {
+    /// Power in 10 µW
+    pub fn power(&mut self) -> Result<i32, E> {
         self.1.power(&mut self.0)
     }
 
-    /// Current in µA
-    pub fn current(&mut self) -> Result<i16, E> {
+    /// Current in 10 µA
+    pub fn current(&mut self) -> Result<i32, E> {
         self.1.current(&mut self.0)
     }
 }
