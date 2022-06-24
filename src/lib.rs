@@ -9,7 +9,7 @@ use hal::blocking::i2c;
 pub const INA219_ADDR: u8 = 0x41;
 
 enum Register {
-    // Configuration = 0x00,
+    Configuration = 0x00,
     ShuntVoltage = 0x01,
     BusVoltage = 0x02,
     Power = 0x03,
@@ -29,10 +29,12 @@ where
     I2C: i2c::Write<Error = E> + i2c::Read<Error = E>,
 {
     /// Maximum expected current in A, must be in (0.4; 3.2].
-    /// r_shunt in Ohm
+    /// r_shunt in Ohm. high_precision enabled maximum current precision (0.1 mA) with
+    /// 16 V and 400 mA maximum.
     pub fn new(
         i2c: &mut I2C,
         address: u8,
+        high_precision: bool,
         maximum_expected_current: f32,
         r_shunt: f32,
     ) -> Result<INA219NonOwned<I2C>, E> {
@@ -50,9 +52,37 @@ where
             _marker: core::marker::PhantomData,
         };
 
+        if high_precision {
+            let INA219_CONFIG_BVOLTAGERANGE_16V = 0;
+            let INA219_CONFIG_GAIN_1_40MV = 0;
+            let INA219_CONFIG_BADCRES_12BIT = 0x0180;
+            let INA219_CONFIG_SADCRES_12BIT_1S_532US = 0x0018;
+            let INA219_CONFIG_MODE_SANDBVOLT_CONTINUOUS = 0x07;
+            ina219.configure(
+                i2c,
+                INA219_CONFIG_BVOLTAGERANGE_16V
+                    | INA219_CONFIG_GAIN_1_40MV
+                    | INA219_CONFIG_BADCRES_12BIT
+                    | INA219_CONFIG_SADCRES_12BIT_1S_532US
+                    | INA219_CONFIG_MODE_SANDBVOLT_CONTINUOUS,
+            );
+        }
+
         ina219.calibrate(i2c, callibration_register_value)?;
 
         Ok(ina219)
+    }
+
+    pub fn configure(&self, i2c: &mut I2C, value: u16) -> Result<(), E> {
+        i2c.write(
+            self.address,
+            &[
+                Register::Configuration as u8,
+                (value >> 8) as u8,
+                value as u8,
+            ],
+        )?;
+        Ok(())
     }
 
     pub fn calibrate(&self, i2c: &mut I2C, value: u16) -> Result<(), E> {
@@ -101,15 +131,23 @@ impl<I2C, E> INA219<I2C>
 where
     I2C: i2c::Write<Error = E> + i2c::Read<Error = E>,
 {
-    /// Maximum expected current in A, must be in (0; 3.2].
-    /// r_shunt in Ohm
+    /// Maximum expected current in A, must be in (0.4; 3.2].
+    /// r_shunt in Ohm. high_precision enabled maximum current precision (0.1 mA) with
+    /// 16 V and 400 mA maximum.
     pub fn new(
         mut i2c: I2C,
         address: u8,
+        high_precision: bool,
         maximum_expected_current: f32,
         r_shunt: f32,
     ) -> Result<INA219<I2C>, E> {
-        let ina219 = INA219NonOwned::new(&mut i2c, address, maximum_expected_current, r_shunt)?;
+        let ina219 = INA219NonOwned::new(
+            &mut i2c,
+            address,
+            high_precision,
+            maximum_expected_current,
+            r_shunt,
+        )?;
         Ok(INA219(i2c, ina219))
     }
 
