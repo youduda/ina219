@@ -6,7 +6,7 @@ use ina219::{INA219, INA219_ADDR};
 
 fn main() {
     let device = I2cdev::new("/dev/i2c-1").unwrap();
-    let mut ina = INA219::new(device, INA219_ADDR);
+    let mut ina = INA219::new(device, INA219_ADDR, 1.5, 0.1).unwrap();
 
     ina.calibrate(0x0100).unwrap();
 
